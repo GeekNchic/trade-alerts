@@ -35,7 +35,7 @@ const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/T08GV7DAFRV/B08HQ1XBD
 // Tracking variables
 let lastPrice = null;
 let priceHistory = [];
-let tickCounter = 0;
+let trendCounter = 0;
 const BOOM_THRESHOLD = 5; // Define what qualifies as a Boom
 
 // Function to send Slack notifications
