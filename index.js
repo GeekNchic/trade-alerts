@@ -1,3 +1,4 @@
+const { Pool } = require('pg');
 const WebSocket = require('ws');
 const axios = require('axios');
 const pgp = require('pg-promise')();
