@@ -1,10 +1,9 @@
-const { Pool } = require('pg');
 const WebSocket = require('ws');
 const axios = require('axios');
 const pgp = require('pg-promise')();
 
 // PostgreSQL Database Connection
-const pool = new Pool({
+const db = pgp({
     user: 'postgres',
     host: '34.42.242.121',
     database: 'trade_alerts_db',
@@ -13,17 +12,6 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-// Utility for database queries
-const db = {
-    query: async (text, params) => {
-        try {
-            return await pool.query(text, params);
-        } catch (error) {
-            console.error('❌ Database error:', error);
-        }
-    }
-};
-
 // WebSocket connection to Deriv
 const APP_ID = 69728;
 let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
@@ -31,13 +19,16 @@ let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_
 // Slack Webhook URLs
 const SLACK_ALERTS_URL = 'https://hooks.slack.com/services/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';
 const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_PREDICTIONS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_REPORTS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_TRADE_ALERT_URL = 'https://hooks.slack.com/services/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';
 
 // Tracking variables
 let lastPrice = null;
-let priceHistory = [];
+let lastBoomTime = null;
 let tickCounter = 0;
 let trendCounter = 0;
-const BOOM_THRESHOLD = 5; // Define what qualifies as a Boom
+const BOOM_THRESHOLD = 5;
 
 // Function to send Slack notifications
 const sendSlackNotification = async (message, webhookUrl) => {
@@ -71,7 +62,7 @@ connection.onmessage = (event) => {
 };
 
 // Process tick data
-const processTick = (tick) => {
+const processTick = async (tick) => {
     const price = tick.quote;
     const timestamp = new Date();
     tickCounter++;
@@ -85,40 +76,54 @@ const processTick = (tick) => {
         lastBoomTime = timestamp;
 
         // Insert boom alert into the database
-        db.none('INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, $3)', 
-            [price, lastPrice, timestamp])
-        .then(() => console.log('✅ Boom alert saved to database'))
-        .catch(error => console.error('❌ Database insertion error:', error));
+        try {
+            await db.none(
+                'INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, $3)',
+                [price, lastPrice, timestamp]
+            );
+            console.log('✅ Boom alert saved to database');
+        } catch (error) {
+            console.error('❌ Database insertion error:', error);
+        }
     }
 
     lastPrice = price;
 
     if (tickCounter >= 100) {
-        analyzeTrend(price, timestamp);
+        await analyzeTrend(price, timestamp);
         tickCounter = 0;
     }
 };
+
 // Analyze trend and send update
 const analyzeTrend = async (currentPrice, currentTimestamp) => {
     const trend = Math.random() > 0.5 ? 'Green 🟢🐂' : 'Red 🔴🐻';
     trendCounter++;
 
-    await db.none(
-        "INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, $3)",
-        [trend, currentPrice, currentTimestamp]
-    );
+    try {
+        await db.none(
+            "INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, $3)",
+            [trend, currentPrice, currentTimestamp]
+        );
 
-    const trendMessage = `📊 *Trend Alert (#${trendCounter})*:\n🔹 Trend: ${trend}\n💰 Current Price: ${currentPrice}`;
-    console.log(trendMessage);
-    sendSlackNotification(trendMessage, SLACK_TRENDS_URL);
+        const trendMessage = `📊 *Trend Alert (#${trendCounter})*:\n🔹 Trend: ${trend}\n💰 Current Price: ${currentPrice}`;
+        console.log(trendMessage);
+        sendSlackNotification(trendMessage, SLACK_TRENDS_URL);
+    } catch (error) {
+        console.error('❌ Trend analysis database error:', error);
+    }
 };
 
 // Schedule probability predictions every 5 minutes
 setInterval(async () => {
-    const trends = await db.any("SELECT trend FROM trend_alerts ORDER BY id DESC LIMIT 5");
+    try {
+        const trends = await db.any("SELECT trend FROM trend_alerts ORDER BY id DESC LIMIT 5");
 
-    if (trends.length >= 5) {
-        makePrediction(trends);
+        if (trends.length >= 5) {
+            await makePrediction(trends);
+        }
+    } catch (error) {
+        console.error('❌ Error fetching trends:', error);
     }
 }, 5 * 60 * 1000);
 
@@ -128,25 +133,32 @@ const makePrediction = async (trendData) => {
     const probability = ((downtrends / trendData.length) * 100).toFixed(2);
     const trend = downtrends > 2 ? 'Red 🔴🐻' : 'Green 🟢🐂';
 
-    await db.none(
-        "INSERT INTO predictions (probability, trend) VALUES ($1, $2)",
-        [probability, trend]
-    );
+    try {
+        await db.none(
+            "INSERT INTO predictions (probability, trend) VALUES ($1, $2)",
+            [probability, trend]
+        );
 
-    const predictionMessage = `📉 *Prediction:* ${probability}% chance of downtrend continuing in next 7 minutes`;
-    console.log(predictionMessage);
-    sendSlackNotification(predictionMessage, SLACK_PREDICTIONS_URL);
+        const predictionMessage = `📉 *Prediction:* ${probability}% chance of downtrend continuing in next 7 minutes`;
+        console.log(predictionMessage);
+        sendSlackNotification(predictionMessage, SLACK_ALERTS_URL);
+    } catch (error) {
+        console.error('❌ Prediction database error:', error);
+    }
 
     if (probability >= 80) {
         const tradeMessage = `🚨 *High Confidence Trade Alert!*\n📉 *${probability}% probability* of a downtrend.\n💰 Consider placing a SELL trade!`;
         console.log(tradeMessage);
-        sendSlackNotification(tradeMessage, SLACK_TRADE_ALERT_URL);
+        sendSlackNotification(tradeMessage, SLACK_ALERTS_URL);
     }
 
     setTimeout(() => evaluatePrediction(probability), 7 * 60 * 1000);
 };
 
 // Evaluate prediction success rate
+let successCount = 0;
+let failureCount = 0;
+
 const evaluatePrediction = async (probability) => {
     const boomOccurred = lastBoomTime && (Date.now() - lastBoomTime) <= 7 * 60 * 1000;
     let predictionSuccess = probability < 60 ? boomOccurred : !boomOccurred;
@@ -157,14 +169,18 @@ const evaluatePrediction = async (probability) => {
     const totalPredictions = successCount + failureCount;
     const successRate = totalPredictions ? ((successCount / totalPredictions) * 100).toFixed(2) : 0;
 
-    await db.none(
-        "INSERT INTO prediction_reports (successful, failed, total, success_rate) VALUES ($1, $2, $3, $4)",
-        [successCount, failureCount, totalPredictions, successRate]
-    );
+    try {
+        await db.none(
+            "INSERT INTO prediction_reports (successful, failed, total, success_rate) VALUES ($1, $2, $3, $4)",
+            [successCount, failureCount, totalPredictions, successRate]
+        );
 
-    const reportMessage = `📊 *Prediction Report*\n✅ Successful: ${successCount}\n❌ Failed: ${failureCount}\n📈 Total: ${totalPredictions}\n🎯 Success Rate: ${successRate}%`;
-    console.log(reportMessage);
-    sendSlackNotification(reportMessage, SLACK_REPORTS_URL);
+        const reportMessage = `📊 *Prediction Report*\n✅ Successful: ${successCount}\n❌ Failed: ${failureCount}\n📈 Total: ${totalPredictions}\n🎯 Success Rate: ${successRate}%`;
+        console.log(reportMessage);
+        sendSlackNotification(reportMessage, SLACK_ALERTS_URL);
+    } catch (error) {
+        console.error('❌ Error inserting prediction report:', error);
+    }
 };
 
 // Open WebSocket connection
@@ -179,5 +195,7 @@ connection.onerror = (error) => {
 
 connection.onclose = () => {
     console.log('🔌 WebSocket Disconnected. Reconnecting in 5 seconds...');
-    setTimeout(() => connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`), 5000);
+    setTimeout(() => {
+        connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+    }, 5000);
 };
