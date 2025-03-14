@@ -84,7 +84,7 @@ const processTick = (tick) => {
         lastBoomTime = timestamp;
 
         // Insert boom alert into the database
-        db.none('INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, $3)', 
+        await db.query('INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, $3)', 
             [price, lastPrice, timestamp])
         .then(() => console.log('✅ Boom alert saved to database'))
         .catch(error => console.error('❌ Database insertion error:', error));
@@ -104,10 +104,11 @@ const analyzeTrend = async (currentPrice, currentTimestamp) => {
     const trend = Math.random() > 0.5 ? 'Green 🟢🐂' : 'Red 🔴🐻';
     trendCounter++;
 
-    await db.none(
+    await db.query(
         "INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, $3)",
         [trend, currentPrice, currentTimestamp]
     );
+    
 
     const trendMessage = `📊 *Trend Alert (#${trendCounter})*:\n🔹 Trend: ${trend}\n💰 Current Price: ${currentPrice}`;
     console.log(trendMessage);
@@ -129,10 +130,11 @@ const makePrediction = async (trendData) => {
     const probability = ((downtrends / trendData.length) * 100).toFixed(2);
     const trend = downtrends > 2 ? 'Red 🔴🐻' : 'Green 🟢🐂';
 
-    await db.none(
-        "INSERT INTO predictions (probability, trend) VALUES ($1, $2)",
-        [probability, trend]
+    await db.query(
+        "INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, $3)",
+        [trend, currentPrice, currentTimestamp]
     );
+    
 
     const predictionMessage = `📉 *Prediction:* ${probability}% chance of downtrend continuing in next 7 minutes`;
     console.log(predictionMessage);
@@ -158,10 +160,11 @@ const evaluatePrediction = async (probability) => {
     const totalPredictions = successCount + failureCount;
     const successRate = totalPredictions ? ((successCount / totalPredictions) * 100).toFixed(2) : 0;
 
-    await db.none(
+    await db.query(
         "INSERT INTO prediction_reports (successful, failed, total, success_rate) VALUES ($1, $2, $3, $4)",
         [successCount, failureCount, totalPredictions, successRate]
     );
+    
 
     const reportMessage = `📊 *Prediction Report*\n✅ Successful: ${successCount}\n❌ Failed: ${failureCount}\n📈 Total: ${totalPredictions}\n🎯 Success Rate: ${successRate}%`;
     console.log(reportMessage);
