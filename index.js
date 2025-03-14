@@ -25,7 +25,7 @@ let lastPrice = null;
 let lastBoomTime = null;
 let tickCounter = 0;
 let trendCounter = 0;
-const BOOM_THRESHOLD = 5;
+const BOOM_THRESHOLD = 1;
 
 // Function to send Slack notifications
 const sendSlackNotification = async (message, webhookUrl) => {
