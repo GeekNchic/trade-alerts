@@ -12,50 +12,125 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
+// Utility for database queries
 const db = {
     query: async (text, params) => {
         try {
             return await pool.query(text, params);
         } catch (error) {
-            console.error('❌ Database Query Error:', error);
+            console.error('❌ Database error:', error);
         }
     }
 };
 
-// WebSocket Connection
+// WebSocket connection to Deriv
 const APP_ID = 69728;
 let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
 // Slack Webhook URLs
-const SLACK_URLS = {
-    alerts: 'https://hooks.slack.com/services/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',
-    trends: 'https://hooks.slack.com/services/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',
-    predictions: 'https://hooks.slack.com/services/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',
-    reports: 'https://hooks.slack.com/services/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',
-    trade_alerts: 'https://hooks.slack.com/services/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'
-};
+const SLACK_ALERTS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/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';
 
+// Tracking variables
 let lastPrice = null;
-let tickCounter = 0;
-const BOOM_THRESHOLD = 1;
+let priceHistory = [];
 
 // Function to send Slack notifications
 const sendSlackNotification = async (message, webhookUrl) => {
     try {
-        const response = await axios.post(webhookUrl, { text: message });
-        console.log(`✅ Slack message sent: ${message}`);
+        const response = await axios.post(webhookUrl, { text: message }, {
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response.status === 200) {
+            console.log('✅ Slack message sent:', message);
+        } else {
+            console.error('❌ Slack message failed:', response.data);
+        }
     } catch (error) {
-        console.error(`❌ Slack notification error (${webhookUrl}):`, error.message);
+        console.error('❌ Slack notification error:', error);
     }
 };
 
-// WebSocket Event Handlers
+// Handle WebSocket messages
+connection.onmessage = async (event) => {
+    const response = JSON.parse(event.data);
+
+    if (response.error) {
+        console.error('❌ API Error:', response.error.message);
+        return;
+    }
+
+    if (response.msg_type === 'tick') {
+        await processTick(response.tick);
+    }
+};
+
+// Process tick data
+const processTick = async (tick) => {
+    const price = tick.quote;
+    console.log(`💰 Price Update: ${price}`);
+
+    if (lastPrice !== null) {
+        priceHistory.push(price);
+
+        // Keep only the last 100 prices
+        if (priceHistory.length > 100) {
+            priceHistory.shift();
+        }
+    }
+
+    lastPrice = price;
+
+    // Analyze trend after 100 ticks
+    if (priceHistory.length === 100) {
+        await analyzeTrend();
+    }
+};
+
+// Analyze trend over last 100 ticks
+const analyzeTrend = async () => {
+    let upCount = 0;
+    let downCount = 0;
+
+    for (let i = 1; i < priceHistory.length; i++) {
+        if (priceHistory[i] > priceHistory[i - 1]) {
+            upCount++;
+        } else if (priceHistory[i] < priceHistory[i - 1]) {
+            downCount++;
+        }
+    }
+
+    let trend = 'Neutral ⚪';
+    if (upCount > downCount) {
+        trend = 'Bullish 🟢';
+    } else if (downCount > upCount) {
+        trend = 'Bearish 🔴';
+    }
+
+    const trendMessage = `📊 *Trend Analysis (Last 100 Ticks)*\n🔹 Trend: ${trend}\n📈 Up Movements: ${upCount}\n📉 Down Movements: ${downCount}`;
+    console.log(trendMessage);
+
+    await sendSlackNotification(trendMessage, SLACK_TRENDS_URL);
+
+    try {
+        await db.query("INSERT INTO trend_alerts (trend, up_moves, down_moves, timestamp) VALUES ($1, $2, $3, NOW())", 
+            [trend, upCount, downCount]);
+        console.log('✅ Trend alert saved to database');
+    } catch (error) {
+        console.error('❌ Database insertion error:', error);
+    }
+};
+
+// WebSocket connection handling
 connection.onopen = () => {
-    console.log('✅ WebSocket Connected! Subscribing to ticks...');
+    console.log('✅ WebSocket Connected! Subscribing to BOOM500...');
     connection.send(JSON.stringify({ ticks: 'BOOM500', subscribe: 1 }));
 };
 
-connection.onerror = (error) => console.error('❌ WebSocket Error:', error);
+connection.onerror = (error) => {
+    console.error('❌ WebSocket Error:', error);
+};
 
 connection.onclose = () => {
     console.log('🔌 WebSocket Disconnected. Reconnecting in 5 seconds...');
@@ -63,85 +138,3 @@ connection.onclose = () => {
         connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
     }, 5000);
 };
-
-connection.onmessage = async (event) => {
-    const response = JSON.parse(event.data);
-    if (response.error) return console.error('❌ API Error:', response.error.message);
-
-    if (response.msg_type === 'tick') await processTick(response.tick);
-};
-
-// Process tick data and detect booms
-const processTick = async (tick) => {
-    const price = tick.quote;
-    tickCounter++;
-    console.log(`#${tickCounter} 💰 Price: ${price}`);
-
-    if (lastPrice !== null && price - lastPrice >= BOOM_THRESHOLD) {
-        const boomMessage = `🚀 *BOOM!* Price spiked from ${lastPrice} to ${price}`;
-        console.log(boomMessage);
-        await sendSlackNotification(boomMessage, SLACK_URLS.alerts);
-
-        await db.query(
-            'INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, NOW())',
-            [price, lastPrice]
-        );
-        console.log('✅ Boom alert saved to database');
-    }
-
-    lastPrice = price;
-    if (tickCounter >= 100) {
-        await analyzeTrend(price);
-        tickCounter = 0;
-    }
-};
-
-// Analyze trend and store in DB
-const analyzeTrend = async (price) => {
-    const trend = Math.random() > 0.5 ? 'Green 🟢🐂' : 'Red 🔴🐻';
-    console.log(`📊 *Trend Alert:* Trend: ${trend}, Price: ${price}`);
-
-    await db.query(
-        'INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, NOW())',
-        [trend, price]
-    );
-
-    await sendSlackNotification(`📊 Trend Alert: ${trend} at ${price}`, SLACK_URLS.trends);
-};
-
-// Track Predictions and Success Rates
-const trackPrediction = async (prediction) => {
-    const probability = Math.random();
-    const trend = probability > 0.5 ? 'Bullish 🐂' : 'Bearish 🐻';
-    console.log(`🔮 Prediction: ${trend} with ${probability.toFixed(2)} probability`);
-
-    await db.query(
-        'INSERT INTO predictions (probability, trend, created_at) VALUES ($1, $2, NOW())',
-        [probability, trend]
-    );
-
-    await sendSlackNotification(`🔮 Prediction: ${trend} (${(probability * 100).toFixed(2)}%)`, SLACK_URLS.predictions);
-};
-
-// Generate Prediction Reports
-const generatePredictionReport = async () => {
-    const successful = Math.floor(Math.random() * 50);
-    const failed = Math.floor(Math.random() * 50);
-    const total = successful + failed;
-    const successRate = total > 0 ? (successful / total) * 100 : 0;
-
-    console.log(`📊 Prediction Report: Success: ${successful}, Fail: ${failed}, Rate: ${successRate.toFixed(2)}%`);
-
-    await db.query(
-        'INSERT INTO prediction_reports (successful, failed, total, success_rate, report_timestamp) VALUES ($1, $2, $3, $4, NOW())',
-        [successful, failed, total, successRate]
-    );
-
-    await sendSlackNotification(
-        `📊 *Prediction Report:* ✅ Success: ${successful} ❌ Fail: ${failed} 📈 Rate: ${successRate.toFixed(2)}%`,
-        SLACK_URLS.reports
-    );
-};
-
-// Run Prediction Reports every 10 minutes
-setInterval(generatePredictionReport, 10 * 60 * 1000);
