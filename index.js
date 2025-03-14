@@ -1,3 +1,5 @@
+require('dotenv').config(); // Load environment variables
+
 const WebSocket = require('ws');
 const axios = require('axios');
 const pgp = require('pg-promise')();
@@ -16,9 +18,6 @@ const db = pgp({
 const APP_ID = 69728;
 let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
-// Slack Webhook URLs
-const SLACK_ALERTS_URL = 'https://hooks.slack.com/services/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';
-const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/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';
 
 // Tracking variables
 let lastPrice = null;
