@@ -34,6 +34,8 @@ const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/T08GV7DAFRV/B08HQ1XBD
 // Tracking variables
 let lastPrice = null;
 let priceHistory = [];
+let tickCounter = 0;
+const BOOM_THRESHOLD = 5; // Define what qualifies as a Boom
 
 // Function to send Slack notifications
 const sendSlackNotification = async (message, webhookUrl) => {
@@ -69,22 +71,39 @@ connection.onmessage = async (event) => {
 // Process tick data
 const processTick = async (tick) => {
     const price = tick.quote;
-    console.log(`💰 Price Update: ${price}`);
+    tickCounter++;
+    console.log(`📈 Tick #${tickCounter}: Price Update → ${price}`);
 
     if (lastPrice !== null) {
         priceHistory.push(price);
 
-        // Keep only the last 100 prices
         if (priceHistory.length > 100) {
             priceHistory.shift();
         }
     }
 
+    if (lastPrice !== null && price - lastPrice >= BOOM_THRESHOLD) {
+        await handleBoom(price);
+    }
+
     lastPrice = price;
 
-    // Analyze trend after 100 ticks
     if (priceHistory.length === 100) {
         await analyzeTrend();
+    }
+};
+
+// Handle Boom detection
+const handleBoom = async (price) => {
+    const message = `🚀 *Boom Alert!* Price spiked to ${price}`;
+    console.log(message);
+    await sendSlackNotification(message, SLACK_ALERTS_URL);
+
+    try {
+        await db.query("INSERT INTO boom_alerts (price, timestamp) VALUES ($1, NOW())", [price]);
+        console.log('✅ Boom alert saved to database');
+    } catch (error) {
+        console.error('❌ Database insertion error:', error);
     }
 };
 
