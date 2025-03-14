@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+
 const WebSocket = require('ws');
 const axios = require('axios');
 const pgp = require('pg-promise')();
@@ -23,7 +24,9 @@ const pool = new Pool({
     }
   });
   
-
+  const db = {
+    query: (text, params) => pool.query(text, params),
+};
 
 
 const APP_ID = 69728;
