@@ -17,8 +17,8 @@ const APP_ID = 69728;
 let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
 // Slack Webhook URLs
-const SLACK_ALERTS_URL = 'https://hooks.slack.com/services/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';
-const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_ALERTS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/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';
 
 // Tracking variables
 let lastPrice = null;
