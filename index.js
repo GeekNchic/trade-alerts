@@ -66,23 +66,41 @@ const processTick = async (tick) => {
     lastPrice = price;
 
     if (tickCounter >= 100) {
-        await analyzeTrend(price);
+        console.log('🔍 100 ticks reached, analyzing trend...');
+        analyzeTrend(price, timestamp);
         tickCounter = 0;
+    
     }
 };
 
 // Analyze trend and send update
-const analyzeTrend = async (currentPrice) => {
+const analyzeTrend = async (currentPrice, currentTimestamp) => {
+    console.log(`📊 Analyzing trend at ${currentTimestamp} with price ${currentPrice}`);
+
     const trend = Math.random() > 0.5 ? 'Green 🟢🐂' : 'Red 🔴🐻';
     trendCounter++;
+
     try {
-        await db.none("INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, NOW())", [trend, currentPrice]);
-        const trendMessage = `📊 *Trend Alert (#${trendCounter})*:\n🔹 Trend: ${trend}\n💰 Current Price: ${currentPrice}`;
-        sendSlackNotification(trendMessage, SLACK_TRENDS_URL);
+        console.log(`📝 Inserting trend alert into database: ${trend}`);
+        await db.query(
+            "INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, $3)",
+            [trend, currentPrice, currentTimestamp]
+        );
+        console.log('✅ Trend alert successfully saved to database.');
     } catch (error) {
-        console.error('❌ Trend analysis database error:', error);
+        console.error('❌ Database insertion error:', error);
+    }
+
+    try {
+        const trendMessage = `📊 *Trend Alert (#${trendCounter})*:\n🔹 Trend: ${trend}\n💰 Current Price: ${currentPrice}`;
+        console.log(`📢 Sending Slack alert: ${trendMessage}`);
+        await sendSlackNotification(trendMessage, SLACK_TRENDS_URL);
+        console.log('✅ Slack message sent.');
+    } catch (error) {
+        console.error('❌ Slack notification error:', error);
     }
 };
+
 
 // WebSocket connection handling
 connection.onopen = () => {
