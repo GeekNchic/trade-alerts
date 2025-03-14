@@ -22,11 +22,11 @@ const db = {
 const APP_ID = 69728;
 let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
-const SLACK_ALERTS_URL = 'https://hooks.slack.com/services/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';
-const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/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';
-const SLACK_PREDICTIONS_URL = 'https://hooks.slack.com/services/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';
-const SLACK_REPORTS_URL = 'https://hooks.slack.com/services/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';
-const SLACK_TRADE_ALERT_URL = 'https://hooks.slack.com/services/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';
+const SLACK_ALERTS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_TRENDS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_PREDICTIONS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_REPORTS_URL = 'https://hooks.slack.com/services/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';
+const SLACK_TRADE_ALERT_URL = 'https://hooks.slack.com/services/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';
 
 let lastPrice = null;
 let lastBoomTime = null;
