@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script Controller</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        #status { font-size: 24px; margin: 20px 0; }
+        .active { color: green; font-weight: bold; }
+        .inactive { color: red; font-weight: bold; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+    </style>
+</head>
+<body>
+
+    <h1>Script Controller</h1>
+    <p>Status: <span id="status" class="inactive">INACTIVE</span></p>
+    <p>Total Active Time: <span id="activeTime">0</span> seconds</p>
+    <p>Total Inactive Time: <span id="inactiveTime">0</span> seconds</p>
+
+    <button onclick="startScript()">Start Script</button>
+    <button onclick="stopScript()">Stop Script</button>
+
+    <script>
+        async function fetchStatus() {
+            const response = await fetch('http://localhost:3000/status');
+            const data = await response.json();
+
+            document.getElementById('status').textContent = data.status;
+            document.getElementById('status').className = data.status === 'ACTIVE' ? 'active' : 'inactive';
+            document.getElementById('activeTime').textContent = data.totalActiveTime.toFixed(2);
+            document.getElementById('inactiveTime').textContent = data.totalInactiveTime.toFixed(2);
+        }
+
+        async function startScript() {
+            await fetch('http://localhost:3000/start');
+            fetchStatus();
+        }
+
+        async function stopScript() {
+            await fetch('http://localhost:3000/stop');
+            fetchStatus();
+        }
+
+        setInterval(fetchStatus, 1000);
+        fetchStatus();
+    </script>
+
+</body>
+</html>
