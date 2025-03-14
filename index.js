@@ -47,20 +47,24 @@ connection.onmessage = (event) => {
 };
 
 // Process tick data
-const processTick = async (tick) => {
+const processTick = (tick) => {
     const price = tick.quote;
+    const timestamp = tick.timestamp ? new Date(tick.timestamp) : new Date();
     tickCounter++;
+
     console.log(`#${tickCounter} 💰 Price: ${price}`);
 
     if (lastPrice !== null && price - lastPrice >= BOOM_THRESHOLD) {
         const boomMessage = `🚀 *BOOM!* Price spiked from ${lastPrice} to ${price}`;
+        console.log(boomMessage);
         sendSlackNotification(boomMessage, SLACK_ALERTS_URL);
-        lastBoomTime = new Date();
-        try {
-            await db.none('INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, NOW())', [price, lastPrice]);
-        } catch (error) {
-            console.error('❌ Database insertion error:', error);
-        }
+        lastBoomTime = timestamp;
+
+        // Insert boom alert into the database
+        db.none('INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, $3)', 
+            [price, lastPrice, timestamp])
+        .then(() => console.log('✅ Boom alert saved to database'))
+        .catch(error => console.error('❌ Database insertion error:', error));
     }
 
     lastPrice = price;
@@ -69,7 +73,6 @@ const processTick = async (tick) => {
         console.log('🔍 100 ticks reached, analyzing trend...');
         analyzeTrend(price, timestamp);
         tickCounter = 0;
-    
     }
 };
 
