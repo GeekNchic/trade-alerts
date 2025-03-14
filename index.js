@@ -3,13 +3,27 @@ const axios = require('axios');
 const pgp = require('pg-promise')();
 
 // PostgreSQL Database Connection
-const db = pgp({
+/*const db = pgp({
     host: 'localhost',
     port: 5432,
     database: 'trade_alerts_db',
     user: 'postgres',
     password: ''
-});
+});*/
+
+const pool = new Pool({
+    user: 'postgres', // Replace with your Cloud SQL username
+    host: '34.42.242.121',   // Replace with your Cloud SQL instance IP
+    database: 'trade_alerts_db',  
+    password: 'R|I&L>OyAMkI^HH@', // Replace with your Cloud SQL password
+    port: 5432,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+  
+
+
 
 const APP_ID = 69728;
 let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
