@@ -1,4 +1,5 @@
-require('dotenv').config(); // Load environment variables
+import 'dotenv/config';
+console.log('Database Host:', process.env.DB_HOST); // Debugging
 
 const WebSocket = require('ws');
 const axios = require('axios');
