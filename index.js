@@ -17,7 +17,7 @@ const db = pgp({
 });
 
 // WebSocket connection to Deriv
-const APP_ID = process.env.APP_ID || '1089'; // Default APP_ID if not set
+const APP_ID = process.env.APP_ID || '69728'; // Default APP_ID if not set
 const DERIV_URL = `wss://ws.binaryws.com/websockets/v3?app_id=${APP_ID}`;
 let connection = null;
 let reconnectAttempts = 0;
@@ -58,107 +58,135 @@ const logger = winston.createLogger({
 // Function to send Slack notifications
 const sendSlackNotification = async (message, webhookUrl) => {
     try {
-        await axios.post(webhookUrl, { text: message }, { headers: { 'Content-Type': 'application/json' } });
-        logger.info(`✅ Slack message sent: ${message}`);
+        await axios.post(webhookUrl, { text: message });
     } catch (error) {
-        logger.error(`❌ Slack notification error: ${error.message}`);
+        console.error('❌ Slack notification error:', error);
     }
 };
 
-// WebSocket Connection Handling
-const connectWebSocket = () => {
-    if (connection) {
-        connection.close();
-        connection = null;
+connection.onmessage = (event) => {
+    const response = JSON.parse(event.data);
+
+    if (response.error) {
+        console.error('❌ API Error:', response.error.message);
+        return;
     }
 
-    connection = new WebSocket(DERIV_URL);
-
-    connection.onopen = () => {
-        logger.info('✅ WebSocket Connected! Subscribing to ticks...');
-        connection.send(JSON.stringify({ ticks: 'BOOM500', subscribe: 1 }));
-        reconnectAttempts = 0;
-    };
-
-    connection.onerror = (error) => logger.error(`❌ WebSocket Error: ${error.message}`);
-
-    connection.onclose = () => {
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            const waitTime = Math.pow(2, reconnectAttempts) * 1000; // Exponential backoff
-            logger.warn(`🔌 WebSocket Disconnected. Reconnecting in ${waitTime / 1000}s...`);
-            reconnectAttempts++;
-            setTimeout(connectWebSocket, waitTime);
-        } else {
-            logger.error('❌ Max reconnection attempts reached. Manual intervention required.');
-        }
-    };
-
-    connection.onmessage = (event) => {
-        const response = JSON.parse(event.data);
-        if (response.error) return logger.error(`❌ API Error: ${response.error.message}`);
-        if (response.msg_type === 'tick') processTick(response.tick);
-    };
+    if (response.msg_type === 'tick') {
+        processTick(response.tick);
+    }
 };
 
 // Process tick data
 const processTick = (tick) => {
     const price = tick.quote;
-    const timestamp = tick.timestamp ? new Date(tick.timestamp) : new Date();
+    const timestamp = new Date();
     tickCounter++;
-    priceHistory.push(price);
 
-    logger.info(`#${tickCounter} 💰 Price: ${price}`);
+    console.log(`#${tickCounter} 💰 Price: ${price}`);
 
     if (lastPrice !== null && price - lastPrice >= BOOM_THRESHOLD) {
         const boomMessage = `🚀 *BOOM!* Price spiked from ${lastPrice} to ${price}`;
-        logger.info(boomMessage);
+        console.log(boomMessage);
         sendSlackNotification(boomMessage, SLACK_ALERTS_URL);
         lastBoomTime = timestamp;
 
-        // Insert boom alert into the database using transaction
-        db.tx(t => {
-            return t.none('INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, $3)', 
-                [price, lastPrice, timestamp]);
-        })
-        .then(() => logger.info('✅ Boom alert saved to database'))
-        .catch(error => logger.error(`❌ Database insertion error: ${error.message}`));
+        // Insert boom alert into the database
+        db.none('INSERT INTO boom_alerts (price, previous_price, boom_time) VALUES ($1, $2, $3)', 
+            [price, lastPrice, timestamp])
+        .then(() => console.log('✅ Boom alert saved to database'))
+        .catch(error => console.error('❌ Database insertion error:', error));
     }
 
     lastPrice = price;
 
-    if (tickCounter >= SMA_PERIOD) {
+    if (tickCounter >= 100) {
         analyzeTrend(price, timestamp);
         tickCounter = 0;
-        priceHistory = priceHistory.slice(-SMA_PERIOD); // Keep last N prices
     }
 };
 
-// Analyze trend using a simple moving average (SMA)
+
+// Analyze trend and send update
 const analyzeTrend = async (currentPrice, currentTimestamp) => {
-    const sma = priceHistory.reduce((sum, p) => sum + p, 0) / priceHistory.length;
-    const trend = currentPrice > sma ? 'Green 🟢🐂' : 'Red 🔴🐻';
+    const trend = Math.random() > 0.5 ? 'Green 🟢🐂' : 'Red 🔴🐻';
     trendCounter++;
 
-    logger.info(`📊 Analyzing trend at ${currentTimestamp}: Current Price = ${currentPrice}, SMA = ${sma}`);
+    await db.none(
+        "INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, $3)",
+        [trend, currentPrice, currentTimestamp]
+    );
 
-    try {
-        await db.tx(t => {
-            return t.none("INSERT INTO trend_alerts (trend, price, timestamp) VALUES ($1, $2, $3)",
-                [trend, currentPrice, currentTimestamp]);
-        });
-        logger.info('✅ Trend alert successfully saved to database.');
-    } catch (error) {
-        logger.error(`❌ Database insertion error: ${error.message}`);
-    }
-
-    try {
-        const trendMessage = `📊 *Trend Alert (#${trendCounter})*:\n🔹 Trend: ${trend}\n💰 Current Price: ${currentPrice}`;
-        logger.info(`📢 Sending Slack alert: ${trendMessage}`);
-        await sendSlackNotification(trendMessage, SLACK_TRENDS_URL);
-    } catch (error) {
-        logger.error(`❌ Slack notification error: ${error.message}`);
-    }
+    const trendMessage = `📊 *Trend Alert (#${trendCounter})*:\n🔹 Trend: ${trend}\n💰 Current Price: ${currentPrice}`;
+    console.log(trendMessage);
+    sendSlackNotification(trendMessage, SLACK_TRENDS_URL);
 };
 
-// Start WebSocket Connection
-connectWebSocket();
+// Schedule probability predictions every 5 minutes
+setInterval(async () => {
+    const trends = await db.any("SELECT trend FROM trend_alerts ORDER BY id DESC LIMIT 5");
+
+    if (trends.length >= 5) {
+        makePrediction(trends);
+    }
+}, 5 * 60 * 1000);
+
+// Make prediction based on all available trend data
+const makePrediction = async (trendData) => {
+    const downtrends = trendData.filter(t => t.trend.includes('Red')).length;
+    const probability = ((downtrends / trendData.length) * 100).toFixed(2);
+    const trend = downtrends > 2 ? 'Red 🔴🐻' : 'Green 🟢🐂';
+
+    await db.none(
+        "INSERT INTO predictions (probability, trend) VALUES ($1, $2)",
+        [probability, trend]
+    );
+
+    const predictionMessage = `📉 *Prediction:* ${probability}% chance of downtrend continuing in next 7 minutes`;
+    console.log(predictionMessage);
+    sendSlackNotification(predictionMessage, SLACK_PREDICTIONS_URL);
+
+    if (probability >= 80) {
+        const tradeMessage = `🚨 *High Confidence Trade Alert!*\n📉 *${probability}% probability* of a downtrend.\n💰 Consider placing a SELL trade!`;
+        console.log(tradeMessage);
+        sendSlackNotification(tradeMessage, SLACK_TRADE_ALERT_URL);
+    }
+
+    setTimeout(() => evaluatePrediction(probability), 7 * 60 * 1000);
+};
+
+// Evaluate prediction success rate
+const evaluatePrediction = async (probability) => {
+    const boomOccurred = lastBoomTime && (Date.now() - lastBoomTime) <= 7 * 60 * 1000;
+    let predictionSuccess = probability < 60 ? boomOccurred : !boomOccurred;
+
+    if (predictionSuccess) successCount++;
+    else failureCount++;
+
+    const totalPredictions = successCount + failureCount;
+    const successRate = totalPredictions ? ((successCount / totalPredictions) * 100).toFixed(2) : 0;
+
+    await db.none(
+        "INSERT INTO prediction_reports (successful, failed, total, success_rate) VALUES ($1, $2, $3, $4)",
+        [successCount, failureCount, totalPredictions, successRate]
+    );
+
+    const reportMessage = `📊 *Prediction Report*\n✅ Successful: ${successCount}\n❌ Failed: ${failureCount}\n📈 Total: ${totalPredictions}\n🎯 Success Rate: ${successRate}%`;
+    console.log(reportMessage);
+    sendSlackNotification(reportMessage, SLACK_REPORTS_URL);
+};
+
+// Open WebSocket connection
+connection.onopen = () => {
+    console.log('✅ WebSocket Connected! Subscribing to ticks...');
+    connection.send(JSON.stringify({ ticks: 'BOOM500', subscribe: 1 }));
+};
+
+connection.onerror = (error) => {
+    console.error('❌ WebSocket Error:', error);
+};
+
+connection.onclose = () => {
+    console.log('🔌 WebSocket Disconnected. Reconnecting in 5 seconds...');
+    setTimeout(() => connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`), 5000);
+};
