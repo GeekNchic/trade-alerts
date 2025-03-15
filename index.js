@@ -3,6 +3,15 @@ const WebSocket = require('ws');
 const axios = require('axios');
 const pgp = require('pg-promise')();
 
+// Debugging: Print environment variables
+console.log("🔍 Debugging Environment Variables:");
+console.log("DB_USER:", process.env.DB_USER);
+console.log("DB_HOST:", process.env.DB_HOST);
+console.log("DB_NAME:", process.env.DB_NAME);
+console.log("DB_PASSWORD:", process.env.DB_PASSWORD ? "✅ Set" : "❌ Not Set");
+console.log("DB_PORT:", process.env.DB_PORT);
+console.log("SLACK_ALERTS_URL:", process.env.SLACK_ALERTS_URL);
+
 // PostgreSQL Database Connection
 const db = pgp({
     user: process.env.DB_USER,
@@ -13,15 +22,35 @@ const db = pgp({
     ssl: false // SSL disabled as per request
 });
 
-const APP_ID = 69728;
-let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
-
 // Slack Webhook URLs
 const SLACK_ALERTS_URL = process.env.SLACK_ALERTS_URL;
 const SLACK_TRENDS_URL = process.env.SLACK_TRENDS_URL;
 const SLACK_PREDICTIONS_URL = process.env.SLACK_PREDICTIONS_URL;
 const SLACK_REPORTS_URL = process.env.SLACK_REPORTS_URL;
 const SLACK_TRADE_ALERT_URL = process.env.SLACK_TRADE_ALERT_URL;
+
+// Test Database Connection
+db.one("SELECT NOW()")
+    .then(data => console.log("✅ Database connection successful:", data))
+    .catch(err => console.error("❌ Database connection error:", err));
+
+// Test Slack Webhook Connection
+axios.post(process.env.SLACK_ALERTS_URL, { text: "Test Slack message from index.js" })
+    .then(() => console.log("✅ Slack test message sent"))
+    .catch(err => console.error("❌ Slack test error:", err.response ? err.response.data : err.message));
+
+
+// WebSocket Connection
+const APP_ID = 69728;
+let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+
+connection.onopen = () => console.log('✅ WebSocket Connected!');
+
+connection.onerror = (error) => console.error('❌ WebSocket Error:', error);
+
+connection.onclose = () => console.log('🔌 WebSocket Disconnected. Reconnecting in 5 seconds...');
+
+
 
 let lastPrice = null;
 let lastBoomTime = null;
