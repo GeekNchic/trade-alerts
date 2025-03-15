@@ -1,10 +1,10 @@
 require('dotenv').config();
 console.log('Database Host:', process.env.DB_HOST); // Debugging
 
-import WebSocket from 'ws';
-import { post } from 'axios';
+const WebSocket = require('ws');
+const axios = require('axios');
 const pgp = require('pg-promise')();
-import { createLogger, format as _format, transports as _transports } from 'winston'; // Logging
+const winston = require('winston'); // Logging
 
 // PostgreSQL Database Connection
 const db = pgp({
@@ -37,19 +37,19 @@ const BOOM_THRESHOLD = 1;
 const SMA_PERIOD = 10; // Simple Moving Average period
 
 // Logger setup
-const logger = createLogger({
+const logger = winston.createLogger({
     level: 'info',
-    format: _format.combine(
-        _format.timestamp(),
-        _format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`)
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`)
     ),
-    transports: [new _transports.Console(), new _transports.File({ filename: 'app.log' })]
+    transports: [new winston.transports.Console(), new winston.transports.File({ filename: 'app.log' })]
 });
 
 // Function to send Slack notifications
 const sendSlackNotification = async (message, webhookUrl) => {
     try {
-        await post(webhookUrl, { text: message }, { headers: { 'Content-Type': 'application/json' } });
+        await axios.post(webhookUrl, { text: message }, { headers: { 'Content-Type': 'application/json' } });
         logger.info(`✅ Slack message sent: ${message}`);
     } catch (error) {
         logger.error(`❌ Slack notification error: ${error.message}`);
