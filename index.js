@@ -6,18 +6,21 @@ const pgp = require('pg-promise')();
 
 // PostgreSQL Database Connection
 const db = pgp({
-    user: 'postgres',
-    host: '34.42.242.121',
-    database: 'trade_alerts_db',
-    password: 'R|I&L>OyAMkI^HH@',
-    port: 5432,
-    ssl: { rejectUnauthorized: false }
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
 // WebSocket connection to Deriv
-const APP_ID = 69728;
+const APP_ID = process.env.APP_ID;
 let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
+// Slack Webhooks
+const SLACK_ALERTS_URL = process.env.SLACK_ALERTS_URL;
+const SLACK_TRENDS_URL = process.env.SLACK_TRENDS_URL;
 
 // Tracking variables
 let lastPrice = null;
@@ -102,7 +105,6 @@ const analyzeTrend = async (currentPrice, currentTimestamp) => {
         console.error('❌ Slack notification error:', error);
     }
 };
-
 
 // WebSocket connection handling
 connection.onopen = () => {
