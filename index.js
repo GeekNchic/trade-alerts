@@ -36,6 +36,15 @@ let priceHistory = [];
 const BOOM_THRESHOLD = 1;
 const SMA_PERIOD = 10; // Simple Moving Average period
 
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_NAME:', process.env.DB_NAME);
+console.log('DB_PORT:', process.env.DB_PORT);
+console.log('DB_SSL:', process.env.DB_SSL);
+console.log('SLACK_ALERTS_URL:', process.env.SLACK_ALERTS_URL);
+console.log('SLACK_TRENDS_URL:', process.env.SLACK_TRENDS_URL);
+
+
 // Logger setup
 const logger = winston.createLogger({
     level: 'info',
