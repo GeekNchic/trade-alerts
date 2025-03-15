@@ -2,7 +2,6 @@ require('dotenv').config();
 const WebSocket = require('ws');
 const axios = require('axios');
 const pgp = require('pg-promise')();
-const winston = require('winston');
 
 // PostgreSQL Database Connection
 const db = pgp({
