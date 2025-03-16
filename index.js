@@ -10,7 +10,7 @@ const db = pgp({
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT,
-    ssl: true // SSL disabled as per request
+    ssl: true
 });
 
 const APP_ID = 69728;
