@@ -13,6 +13,17 @@ const db = pgp({
     ssl: {rejectUnauthorized: false}// SSL disabled as per request
 });
 
+// Test database connection
+db.connect()
+  .then(obj => {
+    console.log('Database connection successful');
+    // Release the connection when done
+    obj.done();
+  })
+  .catch(error => {
+    console.error('Database connection error:', error);
+  });
+
 const APP_ID = 69728;
 let connection = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
