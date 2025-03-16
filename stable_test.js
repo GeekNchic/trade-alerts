@@ -13,7 +13,7 @@ const db = pgp({
     ssl: {rejectUnauthorized: false}// SSL disabled as per request
 });
 
-// Test database connection
+// Test database connection.
 db.connect()
   .then(obj => {
     console.log('Database connection successful');
